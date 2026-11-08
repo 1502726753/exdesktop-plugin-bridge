@@ -1,0 +1,8 @@
+{
+  "build_result": "failure",
+  "prepare": "failure",
+  "configure": "skipped",
+  "compile": "skipped",
+  "run_id": "42467973365",
+  "commit": "5f27802dd8cff46c4390cd6cc1648122f777a6da"
+}
