@@ -1,0 +1,63 @@
+name: Windows ATL probe
+on:
+  push:
+    branches: [windows-build-prototype]
+    paths: ['.github/workflows/windows-atl-probe.yml']
+  workflow_dispatch:
+permissions: {}
+jobs:
+  probe:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Install ATL for MSVC 14.44
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $where = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $where -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual Studio 14.44 toolset not found' }
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          $process = Start-Process -FilePath $installer -ArgumentList @('modify', '--installPath', ('"' + $vs + '"'), '--add', 'Microsoft.VisualStudio.Component.VC.14.44.17.14.ATL', '--quiet', '--norestart', '--wait') -Wait -PassThru
+          if ($process.ExitCode -notin @(0, 3010)) { throw "Visual Studio installer failed with exit code $($process.ExitCode)" }
+      - name: Compile a program including ATL
+        shell: cmd
+        run: |
+          @echo off
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath`) do set "VSROOT=%%i"
+          if not defined VSROOT exit /b 1
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 || exit /b 1
+          echo #include ^<atlbase.h^> > "%RUNNER_TEMP%\atl_probe.cpp"
+          echo int main() { return 0; } >> "%RUNNER_TEMP%\atl_probe.cpp"
+          cl /nologo /EHsc /std:c++20 "%RUNNER_TEMP%\atl_probe.cpp" /Fe:"%RUNNER_TEMP%\atl_probe.exe" || exit /b 1
+          "%RUNNER_TEMP%\atl_probe.exe" || exit /b 1
+  report:
+    if: always()
+    needs: probe
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: windows-build-prototype
+      - name: Save result
+        env:
+          PROBE_RESULT: ${{ needs.probe.result }}
+        run: |
+          set -euo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          data = {'result': os.environ['PROBE_RESULT'], 'run_id': os.environ['GITHUB_RUN_ID'], 'commit': os.environ['GITHUB_SHA']}
+          Path('ci-status/windows-atl-probe.json').write_text(json.dumps(data, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ci-status/windows-atl-probe.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Record ATL probe result'
+          git push origin HEAD:windows-build-prototype
