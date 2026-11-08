@@ -1,0 +1,64 @@
+diff --git a/Telegram/SourceFiles/data/data_session.cpp b/Telegram/SourceFiles/data/data_session.cpp
+index 19ba263..b115269 100644
+--- a/Telegram/SourceFiles/data/data_session.cpp
++++ b/Telegram/SourceFiles/data/data_session.cpp
+@@ -3547,6 +3547,9 @@ void Session::processMessagesDeleted(
+ 			affected->unknownMessageDeleted(messageId.v);
+ 		}
+ 	}
++	for (const auto &item : toDestroy) {
++		Extera::Plugins::NotifyDeletedMessage(item);
++	}
+ 	if (Extera::SaveDeleted()) {
+ 		auto destroy = std::vector<not_null<HistoryItem*>>();
+ 		for (const auto &item : toDestroy) {
+@@ -3582,6 +3585,9 @@ void Session::processNonChannelMessagesDeleted(const QVector<MTPint> &data) {
+ 			historiesToCheck.emplace(history);
+ 		}
+ 	}
++	for (const auto &item : toDestroy) {
++		Extera::Plugins::NotifyDeletedMessage(item);
++	}
+ 	if (Extera::SaveDeleted()) {
+ 		auto destroy = std::vector<not_null<HistoryItem*>>();
+ 		for (const auto &item : toDestroy) {
+diff --git a/Telegram/SourceFiles/extera/extera_plugins.cpp b/Telegram/SourceFiles/extera/extera_plugins.cpp
+index a1cfd2e..6a4e087 100644
+--- a/Telegram/SourceFiles/extera/extera_plugins.cpp
++++ b/Telegram/SourceFiles/extera/extera_plugins.cpp
+@@ -2115,6 +2115,23 @@ void NotifyNewMessage(not_null<HistoryItem*> item) {
+ 	state.eventInFlight = false;
+ }
+ 
++// Notify while the item and its original text still exist in memory.
++void NotifyDeletedMessage(not_null<HistoryItem*> item) {
++	auto &state = Instance();
++	if (!state.started || state.eventInFlight) {
++		return;
++	}
++	const auto json = MessageToJson(item);
++	state.eventInFlight = true;
++	Call(u"event"_q, QJsonObject{
++		{ u"type"_q, u"update"_q },
++		{ u"name"_q, u"updateDeletedMessage"_q },
++		{ u"account"_q, 0 },
++		{ u"update"_q, json },
++	});
++	state.eventInFlight = false;
++}
++
+ void NotifyScreen(const QString &screen, int64 dialogId) {
+ 	auto &state = Instance();
+ 	if (!state.started || state.eventInFlight) {
+diff --git a/Telegram/SourceFiles/extera/extera_plugins.h b/Telegram/SourceFiles/extera/extera_plugins.h
+index f8aac7b..483112d 100644
+--- a/Telegram/SourceFiles/extera/extera_plugins.h
++++ b/Telegram/SourceFiles/extera/extera_plugins.h
+@@ -61,6 +61,7 @@ QJsonValue SandboxQuery(
+ void ClickMenuItem(const QString &id, QJsonObject context);
+ 
+ void NotifyNewMessage(not_null<HistoryItem*> item);
++void NotifyDeletedMessage(not_null<HistoryItem*> item);
+ void NotifyAppEvent(const QString &name);
+ void NotifyScreen(const QString &screen, int64 dialogId);
+ [[nodiscard]] bool InterceptLocalUrl(const QString &url);
