@@ -18,6 +18,16 @@ git apply --check /path/to/deleted-message-event.patch
 git apply /path/to/deleted-message-event.patch
 ```
 
+## Проверки
+
+Workflow `Check experimental patch` проверяет применение патча к зафиксированному commit и запускает два Python-теста диспетчеризации в существующем `extera_host`. Тесты подменяют нативный модуль `_extera` и не проверяют C++ код, компиляцию, взаимодействие с Telegram или поведение в Windows. Результат работы GitHub Actions нужно проверять отдельно во вкладке Actions.
+
+Локальный запуск тестов:
+
+```sh
+EXDESKTOP_SOURCE=/path/to/exDesktop python3 tests/test_event_dispatch.py
+```
+
 ## Что ещё нужно сделать
 
 1. Подготовить и проверить сборку Windows и её зависимости.
