@@ -1,0 +1,148 @@
+name: Windows smoke build
+
+on:
+  push:
+    branches: [windows-build-prototype]
+    paths: ['.github/workflows/windows-build.yml']
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      prepare: ${{ steps.prepare.outcome }}
+      configure: ${{ steps.configure.outcome }}
+      compile: ${{ steps.compile.outcome }}
+    steps:
+      - name: Checkout bridge
+        uses: actions/checkout@v6
+        with:
+          path: bridge
+          persist-credentials: false
+      - name: Checkout pinned exDesktop and submodules
+        uses: actions/checkout@v6
+        with:
+          repository: metawka/exDesktop
+          ref: a4363ff23433ea05ab608a8eeced2e08e0aa8203
+          path: build/tdesktop
+          submodules: recursive
+          persist-credentials: false
+      - name: Apply experimental patch
+        shell: pwsh
+        run: |
+          git -C "$env:GITHUB_WORKSPACE/build/tdesktop" apply --check "$env:GITHUB_WORKSPACE/bridge/patches/deleted-message-event.patch"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git -C "$env:GITHUB_WORKSPACE/build/tdesktop" apply "$env:GITHUB_WORKSPACE/bridge/patches/deleted-message-event.patch"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Set up Python 3.11 SDK
+        id: py311
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11.9'
+          architecture: x64
+      - name: Prepare embedded Python and development files
+        shell: pwsh
+        env:
+          PY311: ${{ steps.py311.outputs.python-path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pythonRoot = Split-Path $env:PY311
+          $dest = "$env:GITHUB_WORKSPACE/build/Libraries/win64/python311"
+          New-Item -ItemType Directory -Force "$dest/embed" | Out-Null
+          Copy-Item "$pythonRoot/include" "$dest/include" -Recurse
+          Copy-Item "$pythonRoot/libs" "$dest/libs" -Recurse
+          if (-not (Test-Path "$dest/libs/python311.lib")) { throw 'Python import library not found' }
+          $archive = "$env:RUNNER_TEMP/python-embed.zip"
+          Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip' -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath "$dest/embed"
+      - name: Set up Python 3.10 for building
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+          architecture: x64
+      - name: Prepare Windows dependencies
+        id: prepare
+        continue-on-error: true
+        shell: cmd
+        run: |
+          @echo off
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath`) do set "VSROOT=%%i"
+          if not defined VSROOT exit /b 1
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 || exit /b 1
+          cd /d "%GITHUB_WORKSPACE%\build"
+          call tdesktop\Telegram\build\prepare\win.bat silent || exit /b 1
+      - name: Configure experimental build
+        id: configure
+        if: steps.prepare.outcome == 'success'
+        continue-on-error: true
+        shell: cmd
+        run: |
+          @echo off
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath`) do set "VSROOT=%%i"
+          if not defined VSROOT exit /b 1
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 || exit /b 1
+          cd /d "%GITHUB_WORKSPACE%\build\tdesktop\Telegram"
+          rem TEST ONLY credentials published in upstream docs/api_credentials.md.
+          call configure.bat x64 -D TDESKTOP_API_ID=17349 -D TDESKTOP_API_HASH=344583e45741c457fe1862106095a5eb -D DESKTOP_APP_DISABLE_AUTOUPDATE=ON || exit /b 1
+      - name: Compile experimental build
+        id: compile
+        if: steps.configure.outcome == 'success'
+        continue-on-error: true
+        shell: cmd
+        run: |
+          @echo off
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath`) do set "VSROOT=%%i"
+          if not defined VSROOT exit /b 1
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 || exit /b 1
+          cd /d "%GITHUB_WORKSPACE%\build\tdesktop"
+          cmake --build out --config Release --target Telegram || exit /b 1
+      - name: Report overall result
+        if: always()
+        shell: pwsh
+        env:
+          PREPARE: ${{ steps.prepare.outcome }}
+          CONFIGURE: ${{ steps.configure.outcome }}
+          COMPILE: ${{ steps.compile.outcome }}
+        run: |
+          if ($env:PREPARE -ne 'success' -or $env:CONFIGURE -ne 'success' -or $env:COMPILE -ne 'success') { exit 1 }
+          Write-Output 'Compilation completed; no runnable artifact is published.'
+  report:
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: windows-build-prototype
+      - name: Record stage outcomes without logs or secrets
+        shell: bash
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          PREPARE: ${{ needs.build.outputs.prepare }}
+          CONFIGURE: ${{ needs.build.outputs.configure }}
+          COMPILE: ${{ needs.build.outputs.compile }}
+        run: |
+          set -euo pipefail
+          mkdir -p ci-status
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = {k.lower(): os.environ.get(k, '') for k in ('BUILD_RESULT', 'PREPARE', 'CONFIGURE', 'COMPILE')}
+          report['run_id'] = os.environ['GITHUB_RUN_ID']
+          report['commit'] = os.environ['GITHUB_SHA']
+          Path('ci-status/windows-smoke.json').write_text(json.dumps(report, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ci-status/windows-smoke.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Record Windows smoke build status'
+          git push origin HEAD:windows-build-prototype
