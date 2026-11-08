@@ -27,7 +27,7 @@ jobs:
           import json, os, re, subprocess
           from pathlib import Path
           run_id = '42467973365'
-          result = subprocess.run(['gh', 'run', 'view', run_id, '--repo', os.environ['GITHUB_REPOSITORY'], '--log-failed'], text=True, capture_output=True)
+          result = subprocess.run(['gh', 'run', 'view', run_id, '--repo', os.environ['GITHUB_REPOSITORY'], '--log'], text=True, capture_output=True)
           token = os.environ.get('GH_TOKEN', '')
           def clean(line):
               if token: line = line.replace(token, '[REDACTED]')
