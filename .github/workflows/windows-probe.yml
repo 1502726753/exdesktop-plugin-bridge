@@ -1,0 +1,43 @@
+name: Windows toolchain probe
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/windows-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 10
+    steps:
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - name: Check Windows SDK, tools and MSVC compiler
+        shell: cmd
+        run: |
+          @echo off
+          where python || exit /b 1
+          python --version || exit /b 1
+          cmake --version || exit /b 1
+          ninja --version || exit /b 1
+          git --version || exit /b 1
+          if not exist "C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\Windows.h" (
+            echo Windows SDK 10.0.26100.0 not found
+            exit /b 1
+          )
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.14.44.17.14.x86.x64 -property installationPath`) do set "VSROOT=%%i"
+          if not defined VSROOT (
+            echo Visual Studio with toolset 14.44 not found
+            exit /b 1
+          )
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat" -vcvars_ver=14.44 || exit /b 1
+          echo int main() { return 0; } > "%RUNNER_TEMP%\bridge_probe.cpp"
+          cl /nologo /EHsc /std:c++20 "%RUNNER_TEMP%\bridge_probe.cpp" /Fe:"%RUNNER_TEMP%\bridge_probe.exe" || exit /b 1
+          "%RUNNER_TEMP%\bridge_probe.exe" || exit /b 1
+          echo Windows compiler probe passed. This is not an exDesktop build.
