@@ -1,8 +1,8 @@
 {
-  "build_result": "failure",
-  "prepare": "failure",
+  "build_result": "cancelled",
+  "prepare": "cancelled",
   "configure": "skipped",
   "compile": "skipped",
-  "run_id": "42467973365",
-  "commit": "5f27802dd8cff46c4390cd6cc1648122f777a6da"
+  "run_id": "42474482469",
+  "commit": "b92ba7190fa4a61b3660843594c9ddfad2f00267"
 }
