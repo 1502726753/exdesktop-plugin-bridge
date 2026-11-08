@@ -1,0 +1,50 @@
+name: Inspect Windows build failure
+
+on:
+  push:
+    branches: [windows-build-prototype]
+    paths: ['.github/workflows/windows-diagnose.yml']
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: windows-build-prototype
+      - name: Capture restricted diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          run_id = '42467973365'
+          result = subprocess.run(['gh', 'run', 'view', run_id, '--repo', os.environ['GITHUB_REPOSITORY'], '--log-failed'], text=True, capture_output=True)
+          token = os.environ.get('GH_TOKEN', '')
+          def clean(line):
+              if token: line = line.replace(token, '[REDACTED]')
+              line = re.sub(r'\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+)\b', '[REDACTED]', line)
+              line = re.sub(r'(https?://[^\s?]+)\?[^\s]+', r'\1?[REDACTED]', line)
+              line = re.sub(r'(?i)(authorization|password|token|secret|api_hash)\s*[:=]\s*\S+', r'\1=[REDACTED]', line)
+              return line[-500:]
+          lines = [clean(line) for line in result.stdout.splitlines() if 'Prepare Windows dependencies' in line]
+          report = {'run_id': run_id, 'log_query_returncode': result.returncode, 'prepare_tail': lines[-30:]}
+          if result.returncode:
+              report['error'] = 'Could not fetch failed logs; inspect Actions permissions.'
+          Path('ci-status').mkdir(exist_ok=True)
+          Path('ci-status/windows-diagnostic.json').write_text(json.dumps(report, indent=2) + '\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ci-status/windows-diagnostic.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Record sanitized Windows build diagnostics'
+          git push origin HEAD:windows-build-prototype
