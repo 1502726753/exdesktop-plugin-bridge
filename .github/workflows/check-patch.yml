@@ -1,0 +1,34 @@
+name: Check experimental patch
+
+on:
+  push:
+    paths:
+      - 'patches/**'
+      - '.github/workflows/check-patch.yml'
+  pull_request:
+    paths:
+      - 'patches/**'
+      - '.github/workflows/check-patch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout bridge
+        uses: actions/checkout@v4
+      - name: Check patch against pinned upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/exdesktop"
+          git -C "$RUNNER_TEMP/exdesktop" remote add origin https://github.com/metawka/exDesktop.git
+          git -C "$RUNNER_TEMP/exdesktop" fetch --depth=1 origin a4363ff23433ea05ab608a8eeced2e08e0aa8203
+          git -C "$RUNNER_TEMP/exdesktop" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/exdesktop" rev-parse HEAD)" = a4363ff23433ea05ab608a8eeced2e08e0aa8203
+          git -C "$RUNNER_TEMP/exdesktop" apply --check "$GITHUB_WORKSPACE/patches/deleted-message-event.patch"
+          git -C "$RUNNER_TEMP/exdesktop" apply "$GITHUB_WORKSPACE/patches/deleted-message-event.patch"
+          git -C "$RUNNER_TEMP/exdesktop" diff --check
