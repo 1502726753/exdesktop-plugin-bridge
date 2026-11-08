@@ -1,5 +1,36 @@
 {
   "run_id": "42467973365",
   "log_query_returncode": 0,
-  "prepare_tail": []
+  "prepare_tail": [
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4379222Z     4 Error(s)",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4379500Z ",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4379674Z Time Elapsed 00:00:06.48",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4709571Z NOT FOUND, BUILDING:",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4711158Z ---------------------------------COMMANDS-LIST----------------------------------",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4713276Z if exist breakpad rmdir /Q /S breakpad",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4713884Z if exist breakpad exit /b 1",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4714541Z git clone https://chromium.googlesource.com/breakpad/breakpad",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4715252Z cd breakpad",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4715686Z git checkout dfcb7b6799",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4716160Z git apply ../patches/breakpad.diff",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4716789Z git clone -b release-1.11.0 https://github.com/google/googletest src/testing",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4717660Z SET \"PYTHONUTF8=1\"",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4718062Z SET \"FolderPostfix=\"",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4718490Z SET \"ToolsetProp=\"",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4718937Z SET \"FolderPostfix=_x64\"",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4720136Z %THIRDPARTY_DIR%\\python\\Scripts\\activate.bat",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4720973Z cd src\\client\\windows",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4722025Z gyp --no-circular-check breakpad_client.gyp --format=ninja",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4722703Z cd ..\\..",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4723321Z ninja -C out/Debug%FolderPostfix% common crash_generation_client exception_handler",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4724405Z ninja -C out/Release%FolderPostfix% common crash_generation_client exception_handler",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4725208Z cd tools\\windows\\dump_syms",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4725660Z gyp dump_syms.gyp --format=msvs",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4726579Z msbuild -m dump_syms.vcxproj /property:Configuration=Release /property:Platform=\"x64\" %ToolsetProp%",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4727157Z deactivate",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4727485Z --------------------------------------------------------------------------------",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.4728489Z [27/36](Libraries/breakpad): FAILED",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.5137375Z FAILED",
+    "build\tPrepare Windows dependencies\t2026-11-08T10:51:49.5510254Z ##[error]Process completed with exit code 1."
+  ]
 }
