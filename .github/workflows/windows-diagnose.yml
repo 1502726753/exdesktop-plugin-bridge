@@ -26,7 +26,7 @@ jobs:
           python3 - <<'PY'
           import json, os, re, subprocess
           from pathlib import Path
-          run_id = '42467973365'
+          run_id = '42473723927'
           result = subprocess.run(['gh', 'run', 'view', run_id, '--repo', os.environ['GITHUB_REPOSITORY'], '--log'], text=True, capture_output=True)
           token = os.environ.get('GH_TOKEN', '')
           def clean(line):
@@ -35,7 +35,7 @@ jobs:
               line = re.sub(r'(https?://[^\s?]+)\?[^\s]+', r'\1?[REDACTED]', line)
               line = re.sub(r'(?i)(authorization|password|token|secret|api_hash)\s*[:=]\s*\S+', r'\1=[REDACTED]', line)
               return line[-500:]
-          lines = [clean(line) for line in result.stdout.splitlines() if 'Prepare Windows dependencies' in line]
+          lines = [clean(line) for line in result.stdout.splitlines() if 'Install ATL for MSVC 14.44' in line or 'Compile a program including ATL' in line]
           report = {'run_id': run_id, 'log_query_returncode': result.returncode, 'prepare_tail': lines[-20:], 'errors': [s for s in lines if re.search(r'(?i)(?:fatal error|error [A-Z]+[0-9]+|\berror:|failed|cannot find|not found)', s)][-40:]}
           if result.returncode:
               report['error'] = 'Could not fetch failed logs; inspect Actions permissions.'
