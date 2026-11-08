@@ -4,10 +4,12 @@ on:
   push:
     paths:
       - 'patches/**'
+      - 'tests/**'
       - '.github/workflows/check-patch.yml'
   pull_request:
     paths:
       - 'patches/**'
+      - 'tests/**'
       - '.github/workflows/check-patch.yml'
   workflow_dispatch:
 
@@ -32,3 +34,8 @@ jobs:
           git -C "$RUNNER_TEMP/exdesktop" apply --check "$GITHUB_WORKSPACE/patches/deleted-message-event.patch"
           git -C "$RUNNER_TEMP/exdesktop" apply "$GITHUB_WORKSPACE/patches/deleted-message-event.patch"
           git -C "$RUNNER_TEMP/exdesktop" diff --check
+      - name: Test Python event dispatch
+        env:
+          EXDESKTOP_SOURCE: ${{ runner.temp }}/exdesktop
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 tests/test_event_dispatch.py
